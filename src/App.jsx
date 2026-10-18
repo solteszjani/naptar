@@ -134,7 +134,7 @@ export default function App() {
 
   function openNew(date = currentDate) { setDraft(blankEvent(date)); setModal({type:'edit'}); }
   function openEdit(event) {
-    setDraft({...event, start_at:format(parseISO(event.start_at),'yyyy-MM-dd\\'T\\'HH:mm'), end_at:format(parseISO(event.end_at),'yyyy-MM-dd\\'T\\'HH:mm')});
+    setDraft({...event, start_at:format(parseISO(event.start_at), "yyyy-MM-dd'T'HH:mm"), end_at:format(parseISO(event.end_at), "yyyy-MM-dd'T'HH:mm")});
     setModal({type:'edit'});
   }
 
