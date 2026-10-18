@@ -47,25 +47,11 @@ export default function App() {
 
   useEffect(() => {
     if (!isConfigured) { setAuthLoading(false); return; }
-    let active = true;
-    supabase.auth.getSession()
-      .then(({data, error}) => {
-        if (!active) return;
-        if (error) setAuthMessage(error.message || 'Nem sikerült ellenőrizni a bejelentkezést.');
-        setSession(data?.session || null);
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      })
-      .finally(() => {
-        if (active) setAuthLoading(false);
-      });
+    supabase.auth.getSession().then(({data}) => { setSession(data.session); setAuthLoading(false); });
     const {data:{subscription}} = supabase.auth.onAuthStateChange((_event, next) => {
-      if (!active) return;
-      setSession(next || null);
-      setAuthLoading(false);
+      setSession(next); setAuthLoading(false);
     });
-    return () => { active = false; subscription.unsubscribe(); };
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -98,25 +84,20 @@ export default function App() {
     const result = authMode === 'login'
       ? await supabase.auth.signInWithPassword({email, password})
       : await supabase.auth.signUp({email, password, options:{emailRedirectTo:window.location.origin}});
-    if (result.error) {
-      setAuthMessage(result.error.message || 'Nem sikerült belépni. Próbáld újra.');
+     if (result.error) {
+      setAuthMessage(result.error.message);
       return;
     }
 
-    // A saját API-nk cookie-val hitelesít. A sikeres válasz után azonnal
-    // frissítjük a React állapotát, nem kell az oldal újratöltésére várni.
     const nextSession = result.data?.session || null;
-    if (nextSession?.user) {
+    if (nextSession) {
       setSession(nextSession);
       setAuthMessage('');
-      setPassword('');
-      setAuthLoading(false);
     } else if (authMode === 'signup') {
-      setAuthMessage('A regisztráció elkészült, de nem kaptunk belépési munkamenetet. Próbálj meg bejelentkezni.');
+      setAuthMessage('A regisztráció elkészült, de az automatikus belépés nem sikerült. Jelentkezz be a fiókoddal.');
       setAuthMode('login');
-    } else {
-      setAuthMessage('A szerver nem adott vissza belépési munkamenetet. Frissítsd az oldalt, majd próbáld újra.');
     }
+  } // authenticate függvény vége
 
   async function createCalendar() {
     const name = prompt('Mi legyen a közös naptár neve?', 'A mi naptárunk');
@@ -249,5 +230,18 @@ export default function App() {
 }
 
 function SetupScreen() {
-  return <main className="setup-screen dark-theme"><div className="setup-card wide"><div className="brand-mark"><Heart size={26}/></div><h1>A mi naptárunk</h1><h2>Az adatbázis még nincs összekötve</h2><p>A projektet egy közös Supabase-adatbázishoz kell kapcsolni. Kövesd a csomagban lévő <b>README.md</b> útmutatót, futtasd le az SQL-sémát, majd add meg a környezeti változókat.</p><div className="code-hint">VITE_SUPABASE_URL<br/>VITE_SUPABASE_ANON_KEY</div></div></main>;
+  return (
+    <main className="setup-screen dark-theme">
+      <div className="setup-card wide">
+        <div className="brand-mark"><Heart size={26} /></div>
+        <h1>A mi naptárunk</h1>
+        <h2>Az adatbázis még nincs összekötve</h2>
+        <p>
+          A projekt a Neon adatbázist használja. Ellenőrizd a Vercel
+          beállításaiban a DATABASE_URL és AUTH_SECRET környezeti változókat,
+          valamint azt, hogy lefuttattad-e a neon_schema.sql fájlt a Neon SQL Editorban.
+        </p>
+      </div>
+    </main>
+  );
 }
