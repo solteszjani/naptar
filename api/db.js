@@ -23,10 +23,38 @@ export default async function handler(req,res){
       const rows=await sql`SELECT id FROM calendars WHERE upper(invite_code)=${code} LIMIT 1`;
       if(!rows.length)return json(res,200,{data:null});
       const cal=rows[0];
-      const count=await sql`SELECT count(*)::int AS n FROM profiles WHERE calendar_id=${cal.id} AND id<>${user.id}`;
-      if(count[0].n>=1)return json(res,403,{error:'Ez a közös naptár már két taggal rendelkezik.'});
-      await sql`UPDATE profiles SET calendar_id=${cal.id} WHERE id=${user.id}`;
+      if(user.calendar_id && user.calendar_id!==cal.id)return json(res,409,{error:'Már egy másik naptár tagja vagy.'});
+      if(user.calendar_id===cal.id)return json(res,200,{data:cal.id});
+      const count=await sql`SELECT count(*)::int AS n FROM profiles WHERE calendar_id=${cal.id}`;
+      // A csatlakozó még nincs a naptárban, ezért a teljes taglétszámot kell nézni.
+      if(Number(count[0].n)>=2)return json(res,403,{error:'Ez a közös naptár már két taggal rendelkezik.'});
+      const updated=await sql`UPDATE profiles SET calendar_id=${cal.id} WHERE id=${user.id} AND calendar_id IS NULL RETURNING id`;
+      if(!updated.length)return json(res,409,{error:'A fiókod közben egy másik naptárhoz kapcsolódott.'});
       return json(res,200,{data:cal.id});
+    }
+
+    if(b.action==='rpc'&&b.name==='list_invitable_users'){
+      if(!user.calendar_id)return json(res,400,{error:'Előbb hozzá kell tartoznod egy közös naptárhoz.'});
+      const count=await sql`SELECT count(*)::int AS n FROM profiles WHERE calendar_id=${user.calendar_id}`;
+      if(Number(count[0].n)>=2)return json(res,200,{data:[]});
+      // Csak másik fiókok, amelyek még nem tartoznak egyetlen naptárhoz sem.
+      const rows=await sql`SELECT id,email,display_name FROM profiles WHERE id<>${user.id} AND calendar_id IS NULL ORDER BY lower(COALESCE(display_name,email))`;
+      return json(res,200,{data:rows});
+    }
+
+    if(b.action==='rpc'&&b.name==='invite_user_to_calendar'){
+      if(!user.calendar_id)return json(res,400,{error:'Előbb hozz létre vagy csatlakozz egy közös naptárhoz.'});
+      const targetId=String(b.args?.p_user_id||'').trim();
+      if(!targetId || targetId===user.id)return json(res,400,{error:'Válassz egy másik felhasználót.'});
+      const count=await sql`SELECT count(*)::int AS n FROM profiles WHERE calendar_id=${user.calendar_id}`;
+      if(Number(count[0].n)>=2)return json(res,409,{error:'Ez a közös naptár már két taggal rendelkezik.'});
+      const targetRows=await sql`SELECT id,email,display_name,calendar_id FROM profiles WHERE id=${targetId} LIMIT 1`;
+      if(!targetRows.length)return json(res,404,{error:'A felhasználó nem található.'});
+      if(targetRows[0].calendar_id===user.calendar_id)return json(res,409,{error:'Ez a felhasználó már tagja a közös naptárnak.'});
+      if(targetRows[0].calendar_id)return json(res,409,{error:'Ez a felhasználó már egy másik naptár tagja.'});
+      const invited=await sql`UPDATE profiles SET calendar_id=${user.calendar_id} WHERE id=${targetId} AND calendar_id IS NULL RETURNING id,email,display_name,calendar_id`;
+      if(!invited.length)return json(res,409,{error:'A felhasználó közben egy másik naptárhoz csatlakozott. Frissítsd a listát.'});
+      return json(res,200,{data:invited[0]});
     }
     const {table,action,payload,filters=[],sort,returning}=b;
     if(!allowed[table])return json(res,400,{error:'Nem támogatott adattábla.'});

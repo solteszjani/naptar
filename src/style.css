@@ -123,3 +123,32 @@ body{background:#0b1020;color:#eef2ff}
   .form-row{grid-template-columns:1fr}
 }
 
+
+/* Regisztrált felhasználók meghívóablaka */
+.invite-trigger{white-space:nowrap;font-size:12px;padding:10px 11px;flex-shrink:0}
+.invite-body{padding:20px 24px 22px}
+.invite-body>p{margin:0 0 16px;color:#9ca8c1;font-size:13px;line-height:1.6}
+.invite-user-list{display:flex;flex-direction:column;gap:9px;max-height:min(48vh,420px);overflow:auto;padding:1px 2px}
+.invite-user{display:flex;align-items:center;gap:11px;padding:11px;background:#0f1728;border:1px solid #2b354e;border-radius:12px;min-width:0}
+.invite-member-text{flex:1;min-width:0}
+.invite-member-text strong{font-size:13px;color:#f3f5ff}
+.invite-member-text span{font-size:11px;color:#9ca8c1}
+.invite-user-button{font-size:11px;padding:9px 11px;white-space:nowrap;flex-shrink:0}
+.invite-user-button svg{width:15px;height:15px}
+.invite-empty{text-align:center;padding:28px 12px 18px}
+.invite-empty .empty-icon{margin-bottom:12px}
+.invite-empty h3{margin:0 0 8px;color:#f2f4ff;font-size:15px}
+.invite-empty p{margin:0 auto;max-width:390px;color:#9ca8c1;font-size:12px;line-height:1.6}
+.invite-status{display:flex;justify-content:center;align-items:center;gap:10px;padding:35px 10px;color:#c4cbe0;font-size:13px}
+.invite-notice{margin:0 0 13px}
+.invite-footer{display:flex;justify-content:flex-end;border-top:1px solid #273149;padding-top:16px;margin-top:18px}
+.invite-hint{font-size:12px!important;margin:0!important;color:#9ca8c1!important;max-width:560px}
+@media(max-width:480px){
+  .invite-trigger{font-size:0;padding:10px;}
+  .invite-trigger svg{width:18px;height:18px}
+  .invite-body{padding:17px 15px 18px}
+  .invite-user{gap:8px;padding:9px}
+  .invite-user-button{padding:8px;font-size:10px;gap:5px}
+  .invite-member-text strong{font-size:12px}
+  .invite-member-text span{font-size:10px}
+}

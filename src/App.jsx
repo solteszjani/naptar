@@ -8,7 +8,7 @@ import { hu } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, CalendarDays, Clock3, MapPin, Users,
   LogOut, Settings, Search, X, Trash2, Pencil, Check, Link2, Copy, Heart,
-  List, Calendar as CalendarIcon, RefreshCw
+  List, Calendar as CalendarIcon, RefreshCw, UserPlus
 } from 'lucide-react';
 import { isConfigured, supabase } from './supabase.js';
 
@@ -42,8 +42,12 @@ export default function App() {
   const [draft, setDraft] = useState(blankEvent());
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
-  const [joinCode, setJoinCode] = useState('');
   const [partnerEmail, setPartnerEmail] = useState('');
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteableUsers, setInviteableUsers] = useState([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [invitingUserId, setInvitingUserId] = useState('');
+  const [inviteError, setInviteError] = useState('');
 
   useEffect(() => {
     if (!isConfigured) { setAuthLoading(false); return; }
@@ -57,6 +61,14 @@ export default function App() {
   useEffect(() => {
     if (session) loadData();
   }, [session]);
+
+  // Ha a másik fél még a saját felületén van, a meghívás után automatikusan
+  // észleljük, amikor a profilja bekerül a közös naptárba.
+  useEffect(() => {
+    if (!session || profile?.calendar_id) return;
+    const timer = setInterval(() => { loadData(); }, 8000);
+    return () => clearInterval(timer);
+  }, [session, profile?.calendar_id]);
 
   async function loadData() {
     if (!session) return;
@@ -110,12 +122,37 @@ export default function App() {
     await loadData(); setToast('Közös naptár létrehozva.');
   }
 
-  async function joinCalendar() {
-    if (!joinCode.trim()) return;
-    const {data, error} = await supabase.rpc('join_calendar_by_code', {p_code:joinCode.trim().toUpperCase()});
-    if (error) return setToast('Nem sikerült csatlakozni: '+error.message);
-    if (!data) return setToast('Nem található ilyen meghívókód.');
-    await loadData(); setJoinCode(''); setToast('Sikeresen csatlakoztál a közös naptárhoz.');
+
+  async function openInviteDialog() {
+    setInviteDialogOpen(true);
+    setInviteLoading(true);
+    setInviteError('');
+    setInviteableUsers([]);
+    const {data, error} = await supabase.rpc('list_invitable_users', {});
+    setInviteLoading(false);
+    if (error) {
+      setInviteError(error.message || 'Nem sikerült betölteni a felhasználókat.');
+      return;
+    }
+    setInviteableUsers(Array.isArray(data) ? data : []);
+  }
+
+  async function inviteRegisteredUser(person) {
+    if (!person?.id || invitingUserId) return;
+    setInvitingUserId(person.id);
+    setInviteError('');
+    const {data, error} = await supabase.rpc('invite_user_to_calendar', {p_user_id:person.id});
+    setInvitingUserId('');
+    if (error) {
+      setInviteError(error.message || 'A meghívás nem sikerült.');
+      // Újraolvassuk a listát, mert közben a másik felhasználó állapota változhatott.
+      const refreshed = await supabase.rpc('list_invitable_users', {});
+      if (!refreshed.error) setInviteableUsers(Array.isArray(refreshed.data) ? refreshed.data : []);
+      return;
+    }
+    setInviteDialogOpen(false);
+    setToast(`${person.display_name || person.email} hozzáadva a közös naptárhoz.`);
+    await loadData();
   }
 
   async function saveEvent(e) {
@@ -208,9 +245,9 @@ export default function App() {
       <header className="topbar">
         <div className="mobile-brand"><Heart size={20}/> A mi naptárunk</div>
         <div className="date-heading"><h1>{view==='day'?fmt(currentDate,'yyyy. MMMM d.') : view==='week'?`${fmt(startOfWeek(currentDate,{weekStartsOn:1}),'MMM d.')} – ${fmt(endOfWeek(currentDate,{weekStartsOn:1}),'MMM d.')}`:fmt(currentDate,'yyyy. MMMM')}</h1><div className="date-actions"><button className="outline" onClick={()=>setCurrentDate(new Date())}>Ma</button><button className="icon-btn large" onClick={()=>setCurrentDate(view==='day'?subDays(currentDate,1):subMonths(currentDate,1))}><ChevronLeft/></button><button className="icon-btn large" onClick={()=>setCurrentDate(view==='day'?addDays(currentDate,1):addMonths(currentDate,1))}><ChevronRight/></button></div></div>
-        <div className="top-actions"><div className="searchbox"><Search size={17}/><input placeholder="Keresés a programok között…" value={search} onChange={e=>setSearch(e.target.value)}/></div><button className="primary top-add" onClick={()=>openNew()}><Plus size={17}/> Program</button></div>
+        <div className="top-actions"><div className="searchbox"><Search size={17}/><input placeholder="Keresés a programok között…" value={search} onChange={e=>setSearch(e.target.value)}/></div>{profile?.calendar_id&&<button className="outline invite-trigger" title="Tag meghívása" onClick={openInviteDialog}><UserPlus size={17}/> Tag meghívása</button>}<button className="primary top-add" onClick={()=>openNew()}><Plus size={17}/> Program</button></div>
       </header>
-      {!profile?.calendar_id ? <section className="setup-card"><div className="setup-icon"><Users size={24}/></div><h2>Hozzátok létre a közös naptárat</h2><p>Az egyikőtök hozzon létre egy naptárat, a másik pedig a meghívókóddal csatlakozhat. Ezután mindketten ugyanazokat az eseményeket látjátok és szerkeszthetitek.</p><div className="setup-actions"><button className="primary" onClick={createCalendar}><Plus size={17}/> Közös naptár létrehozása</button><div className="join-form"><input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Meghívókód" maxLength={12}/><button className="outline" onClick={joinCalendar}>Csatlakozás</button></div></div></section>
+      {!profile?.calendar_id ? <section className="setup-card"><div className="setup-icon"><Users size={24}/></div><h2>Hozzátok létre a közös naptárat</h2><p>Az egyikőtök hozzon létre egy naptárat, majd a „Tag meghívása” gombbal válassza ki a másik felet a regisztrált felhasználók listájából. A meghívás automatikusan összekapcsolja a fiókokat, nincs szükség kódra.</p><div className="setup-actions"><button className="primary" onClick={createCalendar}><Plus size={17}/> Közös naptár létrehozása</button><p className="invite-hint">Ha a párod már létrehozta a közös naptárat, regisztrálj/bejelentkezés után várd meg, amíg meghív. A csatlakozás automatikusan megjelenik.</p></div></section>
       : <>{view==='month' ? <section className="month-view"><div className="weekdays">{['Hétfő','Kedd','Szerda','Csütörtök','Péntek','Szombat','Vasárnap'].map(x=><div key={x}>{x}</div>)}</div><div className="month-grid">{calendarDays.map(day=>{const dayEvs=eventsForDay(day);return <div key={day.toISOString()} className={`day-cell ${!isSameMonth(day,currentDate)?'outside':''} ${isToday(day)?'is-today':''}`} onDoubleClick={()=>openNew(day)}><button className={`day-number ${isToday(day)?'today-number':''}`} onClick={()=>{setCurrentDate(day);setView('day')}}>{format(day,'d')}</button><div className="day-events">{dayEvs.slice(0,3).map(ev=><button key={ev.id} className="event-chip" style={{'--event-color':ev.color||'#3b82f6'}} onClick={e=>{e.stopPropagation();openEdit(ev)}}><span className="event-time">{ev.all_day?'':time(ev.start_at)}</span><span className="event-title">{ev.title}</span></button>)}{dayEvs.length>3&&<button className="more-events" onClick={()=>{setCurrentDate(day);setView('day')}}>+{dayEvs.length-3} további</button>}</div><button className="add-day" title="Program hozzáadása" onClick={()=>openNew(day)}><Plus size={14}/></button></div>})}</div></section>
       : <section className="agenda-view">{dayEvents.length===0?<div className="empty-state"><div className="empty-icon"><CalendarDays size={28}/></div><h3>Nincs program ebben az időszakban</h3><p>Adj hozzá egy programot, hogy mindketten lássátok.</p><button className="primary" onClick={()=>openNew(currentDate)}><Plus size={17}/> Új program</button></div>:dayEvents.map(ev=><button key={ev.id} className="agenda-item" onClick={()=>openEdit(ev)}><div className="agenda-date"><strong>{fmt(parseISO(ev.start_at),'d')}</strong><span>{fmt(parseISO(ev.start_at),'EEE')}</span></div><div className="agenda-line" style={{background:ev.color||'#3b82f6'}}/><div className="agenda-content"><div className="agenda-title-row"><h3>{ev.title}</h3><span className="agenda-time">{ev.all_day?'Egész nap':`${time(ev.start_at)} – ${time(ev.end_at)}`}</span></div>{ev.description&&<p>{ev.description}</p>}<div className="agenda-meta">{ev.location&&<span><MapPin size={14}/>{ev.location}</span>}{ev.recurrence!=='none'&&<span><RefreshCw size={14}/>{ev.recurrence==='daily'?'Naponta':ev.recurrence==='weekly'?'Hetente':'Havonta'}</span>}</div></div><Pencil className="agenda-edit" size={16}/></button>)}</section>}</>}
       <footer className="footer-note"><Heart size={13}/> Közös tervek, közös emlékek.</footer>
@@ -225,6 +262,7 @@ export default function App() {
       <div className="color-field"><span>Szín</span><div className="color-options">{COLORS.map(c=><button type="button" title={c.name} key={c.value} className={`color-dot ${draft.color===c.value?'chosen':''}`} style={{background:c.value}} onClick={()=>setDraft({...draft,color:c.value})}>{draft.color===c.value&&<Check size={14}/>}</button>)}</div></div>
       <div className="modal-footer">{draft.id&&<button type="button" className="danger-button" onClick={()=>deleteEvent(draft.id)}><Trash2 size={16}/> Törlés</button>}<div className="footer-spacer"/><button type="button" className="outline" onClick={()=>setModal(null)}>Mégse</button><button className="primary" type="submit" disabled={saving}>{saving?'Mentés…':'Mentés'}</button></div>
     </form></section></div>}
+    {inviteDialogOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget&&!invitingUserId)setInviteDialogOpen(false)}}><section className="event-modal invite-modal" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title"><header className="modal-header"><div><p className="eyebrow">KÖZÖS NAPTÁR</p><h2 id="invite-modal-title">Tag meghívása</h2></div><button className="icon-btn" onClick={()=>setInviteDialogOpen(false)} disabled={!!invitingUserId}><X/></button></header><div className="invite-body"><p>Válaszd ki a párodat a regisztrált felhasználók közül. A meghívás után automatikusan hozzáfér a közös naptárhoz.</p>{inviteError&&<div className="notice invite-notice">{inviteError}</div>}{inviteLoading?<div className="invite-status"><div className="spinner"/> Felhasználók betöltése…</div>:inviteableUsers.length===0?<div className="invite-empty"><div className="empty-icon"><Users size={25}/></div><h3>Nincs meghívható felhasználó</h3><p>A másik félnek először regisztrálnia kell. Csak azok jelennek meg itt, akik még nem tartoznak másik naptárhoz.</p></div>:<div className="invite-user-list">{inviteableUsers.map(person=><div className="invite-user" key={person.id}><div className="avatar partner">{(person.display_name||person.email||'?').slice(0,1).toUpperCase()}</div><div className="member-text invite-member-text"><strong>{person.display_name||person.email?.split('@')[0]||'Felhasználó'}</strong><span>{person.email}</span></div><button className="primary invite-user-button" onClick={()=>inviteRegisteredUser(person)} disabled={!!invitingUserId}>{invitingUserId===person.id?'Meghívás…':<><UserPlus size={15}/> Meghívás</>}</button></div>)}</div>}<div className="invite-footer"><button className="outline" onClick={()=>setInviteDialogOpen(false)} disabled={!!invitingUserId}>Bezárás</button></div></div></section></div>}
     {toast&&<div className="toast">{toast}</div>}
   </div>;
 }

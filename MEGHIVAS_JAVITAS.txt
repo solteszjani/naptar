@@ -1,0 +1,23 @@
+KÖZÖS NAPTÁR – MEGHÍVÁS GOMBOS JAVÍTÁS
+
+Mit tartalmaz?
+- src/App.jsx: Tag meghívása gomb, regisztrált felhasználók listája, közvetlen meghívás és automatikus frissülés a meghívott fiókján.
+- api/db.js: biztonságos API-műveletek a meghívható felhasználók listázására és meghívására; a régi meghívókódos csatlakozás kétfős limitje is javítva.
+- src/style.css: meghívási ablak stílusai.
+- index.html + public/: app ikon és telefonos manifest.
+
+Feltöltés GitHubra:
+1. A ZIP-ben lévő fájlokat másold a projekt azonos útvonalain lévő fájlok helyére.
+2. Ellenőrizd, hogy a public mappában megvan az icon-192.png, icon-512.png és manifest.webmanifest.
+3. Commitold a módosításokat a main ágra.
+4. Várd meg a Vercel új telepítésének befejezését.
+
+Használat:
+1. A naptárat létrehozó fiók lépjen be.
+2. Kattintson a „Tag meghívása” gombra.
+3. A másik félnek előbb regisztrálnia kell a saját fiókjával, és nem szabad egy másik naptár tagjának lennie.
+4. A listában a „Meghívás” gomb egyből összekapcsolja a fiókokat. A másik fél felülete néhány másodpercen belül magától átvált a közös naptárra.
+
+A megosztott naptár továbbra is legfeljebb két tagú. A meghívás a profiles.calendar_id mezőt állítja be; nem törli a már létező eseményeket.
+
+Ellenőrzés: a módosított App.jsx és api/db.js JavaScript/JSX szintaxisát ellenőriztem. A teljes Vite buildet ebben a környezetben nem sikerült futtatni, mert az npm függőségtelepítés hálózati időtúllépéssel leállt.

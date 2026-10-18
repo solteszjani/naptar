@@ -30,3 +30,8 @@ Nyisd meg a Vercel URL-t, regisztráljatok külön e-mail-címmel és jelszóval
 - Ez az induló verzió egy közös naptárhoz készült; a meghívókódos csatlakozás legfeljebb két tagot enged.
 - A jelenlegi felület esemény-CRUD-ot támogat. Az ismétlődési és emlékeztető mező elmentődik, de az automatikus ismétlődés és tényleges értesítések még nincsenek implementálva.
 - Éles használat előtt teszteld a regisztrációt, bejelentkezést, naptárlétrehozást és események szerkesztését.
+
+
+## Tag meghívása a felhasználói listából
+
+A belépett naptártulajdonos a „Tag meghívása” gombbal kilistázhatja azokat a regisztrált felhasználókat, akik még nem tartoznak másik naptárhoz. A „Meghívás” gomb közvetlenül a közös naptárhoz kapcsolja a kiválasztott profilt. A másik fél felülete rövid időn belül automatikusan észleli a meghívást. Egy naptár legfeljebb két tagot tartalmazhat.
