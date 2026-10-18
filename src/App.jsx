@@ -84,9 +84,19 @@ export default function App() {
     const result = authMode === 'login'
       ? await supabase.auth.signInWithPassword({email, password})
       : await supabase.auth.signUp({email, password, options:{emailRedirectTo:window.location.origin}});
-    if (result.error) setAuthMessage(result.error.message);
-    else if (authMode === 'signup' && !result.data.session) setAuthMessage('Ellenőrizd az e-mail-fiókodat a regisztráció megerősítéséhez.');
-  }
+     if (result.error) {
+      setAuthMessage(result.error.message);
+      return;
+    }
+
+    const nextSession = result.data?.session || null;
+    if (nextSession) {
+      setSession(nextSession);
+      setAuthMessage('');
+    } else if (authMode === 'signup') {
+      setAuthMessage('A regisztráció elkészült, de az automatikus belépés nem sikerült. Jelentkezz be a fiókoddal.');
+      setAuthMode('login');
+    }
 
   async function createCalendar() {
     const name = prompt('Mi legyen a közös naptár neve?', 'A mi naptárunk');
