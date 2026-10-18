@@ -1,6 +1,131 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, format, isSameMonth, isSameDay, isToday, parseISO,
+  addDays, subDays, startOfDay, endOfDay
+} from 'date-fns';
+import { hu } from 'date-fns/locale';
+import {
+  ChevronLeft, ChevronRight, Plus, CalendarDays, Clock3, MapPin, Users,
+  LogOut, Settings, Search, X, Trash2, Pencil, Check, Link2, Copy, Heart,
+  List, Calendar as CalendarIcon, RefreshCw
+} from 'lucide-react';
+import { isConfigured, supabase } from './supabase.js';
 
-    
-  
+const COLORS = [
+  {name:'Kék',value:'#3b82f6'}, {name:'Lila',value:'#8b5cf6'},
+  {name:'Rózsaszín',value:'#ec4899'}, {name:'Zöld',value:'#10b981'},
+  {name:'Narancs',value:'#f59e0b'}, {name:'Piros',value:'#ef4444'}
+];
+const blankEvent = (date = new Date()) => ({
+  title:'', description:'', location:'', start_at:format(date,'yyyy-MM-dd')+'T09:00',
+  end_at:format(date,'yyyy-MM-dd')+'T10:00', color:'#3b82f6', all_day:false,
+  recurrence:'none', reminder_minutes:15
+});
+const fmt = (date, pattern) => format(date, pattern, {locale:hu});
+const time = (value) => fmt(parseISO(value), 'HH:mm');
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authMode, setAuthMode] = useState('login');
+  const [authMessage, setAuthMessage] = useState('');
+  const [profile, setProfile] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState('month');
+  const [search, setSearch] = useState('');
+  const [modal, setModal] = useState(null);
+  const [draft, setDraft] = useState(blankEvent());
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [partnerEmail, setPartnerEmail] = useState('');
+
+  useEffect(() => {
+    if (!isConfigured) { setAuthLoading(false); return; }
+    let active = true;
+    supabase.auth.getSession()
+      .then(({data, error}) => {
+        if (!active) return;
+        if (error) setAuthMessage(error.message || 'Nem sikerült ellenőrizni a bejelentkezést.');
+        setSession(data?.session || null);
+      })
+      .catch(() => {
+        if (active) setSession(null);
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event, next) => {
+      if (!active) return;
+      setSession(next || null);
+      setAuthLoading(false);
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    if (session) loadData();
+  }, [session]);
+
+  async function loadData() {
+    if (!session) return;
+    const {data: prof} = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    setProfile(prof);
+    if (prof?.calendar_id) {
+      const [{data: evs}, {data: mems}] = await Promise.all([
+        supabase.from('events').select('*').eq('calendar_id', prof.calendar_id).order('start_at'),
+        supabase.from('profiles').select('id,email,display_name').eq('calendar_id', prof.calendar_id)
+      ]);
+      setEvents(evs || []); setMembers(mems || []);
+    } else {
+      setEvents([]); setMembers([]);
+    }
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  async function authenticate(e) {
+    e.preventDefault(); setAuthMessage('');
+    const result = authMode === 'login'
+      ? await supabase.auth.signInWithPassword({email, password})
+      : await supabase.auth.signUp({email, password, options:{emailRedirectTo:window.location.origin}});
+    if (result.error) {
+      setAuthMessage(result.error.message || 'Nem sikerült belépni. Próbáld újra.');
+      return;
+    }
+
+    // A saját API-nk cookie-val hitelesít. A sikeres válasz után azonnal
+    // frissítjük a React állapotát, nem kell az oldal újratöltésére várni.
+    const nextSession = result.data?.session || null;
+    if (nextSession?.user) {
+      setSession(nextSession);
+      setAuthMessage('');
+      setPassword('');
+      setAuthLoading(false);
+    } else if (authMode === 'signup') {
+      setAuthMessage('A regisztráció elkészült, de nem kaptunk belépési munkamenetet. Próbálj meg bejelentkezni.');
+      setAuthMode('login');
+    } else {
+      setAuthMessage('A szerver nem adott vissza belépési munkamenetet. Frissítsd az oldalt, majd próbáld újra.');
+    }
+
+  async function createCalendar() {
+    const name = prompt('Mi legyen a közös naptár neve?', 'A mi naptárunk');
+    if (!name?.trim()) return;
+    const code = crypto.randomUUID().replaceAll('-','').slice(0,8).toUpperCase();
+    const {data: cal, error} = await supabase.from('calendars').insert({name:name.trim(), invite_code:code, created_by:session.user.id}).select().single();
+    if (error) return setToast('Nem sikerült létrehozni: '+error.message);
+    const {error: pError} = await supabase.from('profiles').upsert({id:session.user.id,email:session.user.email,display_name:session.user.email.split('@')[0],calendar_id:cal.id});
+    if (pError) return setToast('Naptár létrejött, de a profil mentése nem sikerült.');
     await loadData(); setToast('Közös naptár létrehozva.');
   }
 
@@ -126,4 +251,3 @@
 function SetupScreen() {
   return <main className="setup-screen dark-theme"><div className="setup-card wide"><div className="brand-mark"><Heart size={26}/></div><h1>A mi naptárunk</h1><h2>Az adatbázis még nincs összekötve</h2><p>A projektet egy közös Supabase-adatbázishoz kell kapcsolni. Kövesd a csomagban lévő <b>README.md</b> útmutatót, futtasd le az SQL-sémát, majd add meg a környezeti változókat.</p><div className="code-hint">VITE_SUPABASE_URL<br/>VITE_SUPABASE_ANON_KEY</div></div></main>;
 }
-
